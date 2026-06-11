@@ -15,6 +15,8 @@
       height: 100vh;
       width: 100vw;
       cursor: grab;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     body.dragging { cursor: grabbing; }
 
@@ -118,6 +120,14 @@
       z-index: 10;
       pointer-events: none;
     }
+
+    /* ===== 移动端适配 ===== */
+    @media (max-width: 768px) {
+      .hint    { font-size: 12px; bottom: 18px; }
+      .credit  { font-size: 11px; bottom: 18px; left: 15px; }
+      .counter { font-size: 11px; top: 12px; right: 15px; }
+      .loading { font-size: 15px; }
+    }
   </style>
 </head>
 <body>
@@ -140,9 +150,15 @@
 
   <script>
     (function () {
+      // ============ 设备检测 ============
+      const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+                       ('ontouchstart' in window && window.innerWidth < 768);
+      const SCALE = Math.max(0.5, Math.min(1, window.innerWidth / 900));
+
       // ============ 星空背景 ============
       const starsEl = document.getElementById('stars');
-      for (let i = 0; i < 200; i++) {
+      const starCount = isMobile ? 70 : 200;
+      for (let i = 0; i < starCount; i++) {
         const star = document.createElement('div');
         star.className = 'star';
         const size = Math.random() * 2 + 1;
@@ -161,21 +177,26 @@
       const counterEl = document.getElementById('counter');
       const hintEl = document.getElementById('hint');
 
-      // 球形参数
-      const SPHERE_RADIUS = 520;
-      const IMG_SIZE = 55;
+      // 提示文案
+      hintEl.innerHTML = isMobile
+        ? '&#x1F446; 滑动旋转 &nbsp;|&nbsp; 双指缩放'
+        : '&#x1F5B1; 拖拽旋转 &nbsp;|&nbsp; 滚轮缩放';
+
+      // 响应式球形参数
+      const SPHERE_RADIUS = Math.round(520 * SCALE);
+      const IMG_SIZE = Math.round(55 * SCALE);
       const HALF = IMG_SIZE / 2;
       const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
       // 交互状态
-      let rotX = -15, rotY = 0;        // 球体当前旋转
+      let rotX = -15, rotY = 0;
       let targetRotX = -15, targetRotY = 0;
       let isDragging = false;
       let lastX = 0, lastY = 0;
-      let dragVelX = 0, dragVelY = 0;  // 拖拽惯性
-      let autoRotateSpeed = 0.05;       // 自动旋转速度
-      let zoom = 1200;
-      let targetZoom = 1200;
+      let dragVelX = 0, dragVelY = 0;
+      let autoRotateSpeed = 0.05;
+      let zoom = Math.round(1200 * SCALE);
+      let targetZoom = Math.round(1200 * SCALE);
 
       const scene = document.querySelector('.scene');
 
@@ -359,6 +380,7 @@
 
       // ============ 触摸事件 ============
       document.addEventListener('touchstart', (e) => {
+        e.preventDefault();
         if (e.touches.length === 1) {
           isDragging = true;
           dragVelX = 0;
@@ -378,6 +400,7 @@
 
       let pinchStart = 0;
       document.addEventListener('touchmove', (e) => {
+        e.preventDefault();
         if (e.touches.length === 1 && isDragging) {
           const dx = e.touches[0].clientX - lastX;
           const dy = e.touches[0].clientY - lastY;
