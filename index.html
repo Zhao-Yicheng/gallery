@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
+  <title>球形3D照片墙</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+      overflow: hidden;
+      user-select: none;
+      height: 100vh;
+      width: 100vw;
+      cursor: grab;
+    }
+    body.dragging { cursor: grabbing; }
+
+    /* 粒子背景 */
+    .stars {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .star {
+      position: absolute;
+      background: white;
+      border-radius: 50%;
+      animation: twinkle var(--dur) ease-in-out infinite;
+      animation-delay: var(--delay);
+      opacity: 0;
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 0.8; }
+    }
+
+    /* 场景容器 */
+    .scene {
+      position: fixed;
+      top: 50%; left: 50%;
+      perspective: 1200px;
+      perspective-origin: 50% 50%;
+      z-index: 1;
+    }
+
+    .sphere {
+      width: 0; height: 0;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: none;
+    }
+
+    .sphere img {
+      position: absolute;
+      border-radius: 4px;
+      box-shadow: 0 0 8px rgba(255,255,255,0.3), 0 0 20px rgba(100,150,255,0.15);
+      object-fit: cover;
+      background: #222;
+      backface-visibility: hidden;
+      image-rendering: auto;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    .sphere img.loaded { opacity: 1; }
+
+    /* 提示信息 */
+    .hint {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.5);
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 14px;
+      letter-spacing: 1px;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.5s;
+    }
+
+    .counter {
+      position: fixed;
+      top: 20px;
+      right: 30px;
+      color: rgba(255,255,255,0.35);
+      font-family: 'Segoe UI', monospace;
+      font-size: 13px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* 加载状态 */
+    .loading {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 18px;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .loading.hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- 星空背景 -->
+  <div class="stars" id="stars"></div>
+
+  <!-- 加载提示 -->
+  <div class="loading" id="loading">正在加载照片...</div>
+
+  <!-- 场景 -->
+  <div class="scene">
+    <div class="sphere" id="sphere"></div>
+  </div>
+
+  <!-- 信息 -->
+  <div class="hint" id="hint">🖱 拖拽旋转 &nbsp;|&nbsp; 滚轮缩放</div>
+  <div class="counter" id="counter"></div>
+
+  <script>
+    (function () {
+      // ============ 星空背景 ============
+      const starsEl = document.getElementById('stars');
+      for (let i = 0; i < 200; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        const size = Math.random() * 2 + 1;
+        star.style.cssText = `
+          width:${size}px; height:${size}px;
+          left:${Math.random()*100}%; top:${Math.random()*100}%;
+          --dur:${Math.random()*3+2}s;
+          --delay:${Math.random()*3}s;
+        `;
+        starsEl.appendChild(star);
+      }
+
+      // ============ 主体 ============
+      const sphere = document.getElementById('sphere');
+      const loadingEl = document.getElementById('loading');
+      const counterEl = document.getElementById('counter');
+      const hintEl = document.getElementById('hint');
+
+      // 球形参数
+      const SPHERE_RADIUS = 520;
+      const IMG_SIZE = 55;
+      const HALF = IMG_SIZE / 2;
+      const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+      // 交互状态
+      let rotX = -15, rotY = 0;        // 球体当前旋转
+      let targetRotX = -15, targetRotY = 0;
+      let isDragging = false;
+      let lastX = 0, lastY = 0;
+      let dragVelX = 0, dragVelY = 0;  // 拖拽惯性
+      let autoRotateSpeed = 0.05;       // 自动旋转速度
+      let zoom = 1200;
+      let targetZoom = 1200;
+
+      const scene = document.querySelector('.scene');
+
+      // ============ 斐波那契球面分布 ============
+      function fibonacciSphere(n) {
+        const points = [];
+        for (let i = 0; i < n; i++) {
+          const y = 1 - (i / (n - 1)) * 2;
+          const radiusAtY = Math.sqrt(1 - y * y);
+          const theta = GOLDEN_ANGLE * i;
+          points.push({
+            x: Math.cos(theta) * radiusAtY,
+            y: y,
+            z: Math.sin(theta) * radiusAtY,
+          });
+        }
+        return points;
+      }
+
+      // ============ 加载数据 ============
+      async function loadPhotos() {
+        try {
+          const resp = await fetch('all_photos.json');
+          const data = await resp.json();
+          return data;
+        } catch (e) {
+          // 尝试用本地硬编码数据作为降级
+          loadingEl.textContent = '无法加载照片数据，请通过HTTP服务器打开此页面';
+          console.error('加载失败:', e);
+          return [];
+        }
+      }
+
+      // ============ 创建球体（分批并发加载真实缩略图） ============
+      const CONCURRENCY = 8;
+      let loadedCount = 0;
+      let totalCount = 0;
+
+      function createSphere(photos) {
+        totalCount = photos.length;
+        const points = fibonacciSphere(totalCount);
+        counterEl.textContent = `${totalCount} 张照片`;
+        loadingEl.textContent = `正在排列 ${totalCount} 张照片...`;
+
+        // 先用纯色占位快速显示球体结构
+        const fragment = document.createDocumentFragment();
+        const imgElements = [];
+
+        photos.forEach((photo, i) => {
+          const img = document.createElement('img');
+          img.alt = photo.file_name || '';
+          img.title = photo.file_name || '';
+          img.referrerPolicy = 'no-referrer';
+          img.dataset.thumb = photo.thumb_uri || '';
+          img.dataset.preview = photo.preview_uri || '';
+          img.dataset.index = i;
+          // 纯色占位（色相按索引变化）
+          const hue = (i * 47 + 180) % 360;
+          img.style.background = `hsl(${hue}, 40%, 20%)`;
+
+          const p = points[i];
+          const lat = Math.asin(p.y) * (180 / Math.PI);
+          const lng = Math.atan2(p.x, p.z) * (180 / Math.PI);
+
+          img.style.cssText = `
+            width:${IMG_SIZE}px;
+            height:${IMG_SIZE}px;
+            margin-left:${-HALF}px;
+            margin-top:${-HALF}px;
+            transform: rotateY(${lng}deg) rotateX(${lat}deg) translateZ(${SPHERE_RADIUS}px);
+            background:hsl(${hue}, 40%, 20%);
+          `;
+
+          imgElements.push(img);
+          fragment.appendChild(img);
+        });
+
+        sphere.innerHTML = '';
+        sphere.appendChild(fragment);
+        loadingEl.classList.add('hidden');
+
+        // 分批并发加载缩略图
+        batchLoad(imgElements, 0);
+      }
+
+      function batchLoad(imgList, startIdx) {
+        if (startIdx >= imgList.length) return;
+        const end = Math.min(startIdx + CONCURRENCY, imgList.length);
+        let remaining = end - startIdx;
+
+        function onDone() {
+          remaining--;
+          loadedCount++;
+          counterEl.textContent = loadedCount >= totalCount
+            ? `${totalCount} 张照片`
+            : `加载中 ${loadedCount}/${totalCount}`;
+          if (remaining <= 0) {
+            setTimeout(() => batchLoad(imgList, end), 50);
+          }
+        }
+
+        for (let i = startIdx; i < end; i++) {
+          const img = imgList[i];
+          const thumbUrl = img.dataset.thumb;
+          if (!thumbUrl) { onDone(); continue; }
+
+          // 用临时 Image 检测加载
+          const probe = new Image();
+          probe.referrerPolicy = 'no-referrer';
+          probe.onload = () => {
+            img.src = thumbUrl;
+            img.classList.add('loaded');
+            onDone();
+          };
+          probe.onerror = () => {
+            // 尝试 preview_uri
+            const previewUrl = img.dataset.preview;
+            if (previewUrl && previewUrl !== thumbUrl) {
+              const probe2 = new Image();
+              probe2.referrerPolicy = 'no-referrer';
+              probe2.onload = () => {
+                img.src = previewUrl;
+                img.classList.add('loaded');
+                onDone();
+              };
+              probe2.onerror = () => {
+                img.classList.add('loaded');
+                onDone();
+              };
+              probe2.src = previewUrl;
+            } else {
+              img.classList.add('loaded');
+              onDone();
+            }
+          };
+          probe.src = thumbUrl;
+        }
+      }
+
+      // ============ 渲染循环 ============
+      function updateSphere() {
+        // 平滑插值
+        const lerpFactor = 0.08;
+        rotX += (targetRotX - rotX) * lerpFactor;
+        rotY += (targetRotY - rotY) * lerpFactor;
+        zoom += (targetZoom - zoom) * lerpFactor;
+
+        sphere.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+        scene.style.perspective = `${zoom}px`;
+      }
+
+      // ============ 鼠标事件 ============
+      document.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        dragVelX = 0;
+        dragVelY = 0;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        document.body.classList.add('dragging');
+        hintEl.style.opacity = '0';
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        dragVelY = dx * 0.3;
+        dragVelX = -dy * 0.3;
+        targetRotY += dragVelY;
+        targetRotX += dragVelX;
+        targetRotX = Math.max(-90, Math.min(90, targetRotX));
+        lastX = e.clientX;
+        lastY = e.clientY;
+      });
+
+      document.addEventListener('mouseup', () => {
+        isDragging = false;
+        document.body.classList.remove('dragging');
+        setTimeout(() => { if (!isDragging) hintEl.style.opacity = '1'; }, 1000);
+      });
+
+      // ============ 触摸事件 ============
+      document.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          isDragging = true;
+          dragVelX = 0;
+          dragVelY = 0;
+          lastX = e.touches[0].clientX;
+          lastY = e.touches[0].clientY;
+          document.body.classList.add('dragging');
+          hintEl.style.opacity = '0';
+        }
+        if (e.touches.length === 2) {
+          pinchStart = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+        }
+      }, { passive: false });
+
+      let pinchStart = 0;
+      document.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && isDragging) {
+          const dx = e.touches[0].clientX - lastX;
+          const dy = e.touches[0].clientY - lastY;
+          dragVelY = dx * 0.3;
+          dragVelX = -dy * 0.3;
+          targetRotY += dragVelY;
+          targetRotX += dragVelX;
+          targetRotX = Math.max(-90, Math.min(90, targetRotX));
+          lastX = e.touches[0].clientX;
+          lastY = e.touches[0].clientY;
+        }
+        if (e.touches.length === 2) {
+          const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          if (pinchStart) {
+            const delta = pinchStart - dist;
+            targetZoom = Math.max(500, Math.min(2500, targetZoom + delta));
+          }
+          pinchStart = dist;
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchend', () => {
+        isDragging = false;
+        document.body.classList.remove('dragging');
+        pinchStart = 0;
+        setTimeout(() => { if (!isDragging) hintEl.style.opacity = '1'; }, 1000);
+      });
+
+      // ============ 滚轮缩放 ============
+      document.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        targetZoom += e.deltaY * 0.5;
+        targetZoom = Math.max(500, Math.min(2500, targetZoom));
+      }, { passive: false });
+
+      // ============ 鼠标离开 ============
+      document.addEventListener('mouseleave', () => {
+        isDragging = false;
+        document.body.classList.remove('dragging');
+      });
+
+      // ============ 自动旋转 ============
+      function autoRotate() {
+        if (!isDragging) {
+          // 惯性衰减
+          targetRotY += dragVelY;
+          targetRotX += dragVelX;
+          dragVelY *= 0.92;
+          dragVelX *= 0.92;
+          targetRotX = Math.max(-90, Math.min(90, targetRotX));
+
+          // 自动旋转
+          targetRotY += autoRotateSpeed;
+        }
+      }
+
+      // ============ 动画帧 ============
+      function animate() {
+        autoRotate();
+        updateSphere();
+        requestAnimationFrame(animate);
+      }
+
+      // ============ 启动 ============
+      async function init() {
+        const photos = await loadPhotos();
+        if (photos.length > 0) {
+          createSphere(photos);
+        }
+        animate();
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
