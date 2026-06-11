@@ -106,6 +106,18 @@
       pointer-events: none;
     }
     .loading.hidden { display: none; }
+
+    .credit {
+      position: fixed;
+      bottom: 30px;
+      left: 30px;
+      color: rgba(255,255,255,0.25);
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 13px;
+      letter-spacing: 1px;
+      z-index: 10;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -124,6 +136,7 @@
   <!-- 信息 -->
   <div class="hint" id="hint">🖱 拖拽旋转 &nbsp;|&nbsp; 滚轮缩放</div>
   <div class="counter" id="counter"></div>
+  <div class="credit">Made by 赵奕诚</div>
 
   <script>
     (function () {
