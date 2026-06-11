@@ -195,8 +195,10 @@
       let lastX = 0, lastY = 0;
       let dragVelX = 0, dragVelY = 0;
       let autoRotateSpeed = 0.05;
-      let zoom = Math.round(1200 * SCALE);
-      let targetZoom = Math.round(1200 * SCALE);
+      const MIN_ZOOM = Math.max(300, Math.round(SPHERE_RADIUS * 1.0));
+      const INITIAL_ZOOM = Math.round(Math.max(1800 * SCALE, MIN_ZOOM + 200));
+      let zoom = INITIAL_ZOOM;
+      let targetZoom = INITIAL_ZOOM;
 
       const scene = document.querySelector('.scene');
 
@@ -391,14 +393,16 @@
           hintEl.style.opacity = '0';
         }
         if (e.touches.length === 2) {
-          pinchStart = Math.hypot(
+          pinchStartDist = Math.hypot(
             e.touches[0].clientX - e.touches[1].clientX,
             e.touches[0].clientY - e.touches[1].clientY
           );
+          pinchStartZoom = targetZoom;
         }
       }, { passive: false });
 
-      let pinchStart = 0;
+      let pinchStartDist = 0;
+      let pinchStartZoom = 0;
       document.addEventListener('touchmove', (e) => {
         e.preventDefault();
         if (e.touches.length === 1 && isDragging) {
@@ -412,31 +416,30 @@
           lastX = e.touches[0].clientX;
           lastY = e.touches[0].clientY;
         }
-        if (e.touches.length === 2) {
+        if (e.touches.length === 2 && pinchStartDist > 0) {
           const dist = Math.hypot(
             e.touches[0].clientX - e.touches[1].clientX,
             e.touches[0].clientY - e.touches[1].clientY
           );
-          if (pinchStart) {
-            const delta = pinchStart - dist;
-            targetZoom = Math.max(500, Math.min(2500, targetZoom + delta));
-          }
-          pinchStart = dist;
+          const scale = dist / pinchStartDist;
+          targetZoom = pinchStartZoom / scale;
+          targetZoom = Math.max(MIN_ZOOM, Math.min(5000, targetZoom));
         }
       }, { passive: false });
 
       document.addEventListener('touchend', () => {
         isDragging = false;
         document.body.classList.remove('dragging');
-        pinchStart = 0;
+        pinchStartDist = 0;
         setTimeout(() => { if (!isDragging) hintEl.style.opacity = '1'; }, 1000);
       });
 
-      // ============ 滚轮缩放 ============
+      // ============ 滚轮缩放（乘法，视觉均匀） ============
       document.addEventListener('wheel', (e) => {
         e.preventDefault();
-        targetZoom += e.deltaY * 0.5;
-        targetZoom = Math.max(500, Math.min(2500, targetZoom));
+        const factor = e.deltaY > 0 ? 1.08 : 0.925;
+        targetZoom *= factor;
+        targetZoom = Math.max(MIN_ZOOM, Math.min(5000, targetZoom));
       }, { passive: false });
 
       // ============ 鼠标离开 ============

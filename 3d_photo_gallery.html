@@ -196,4 +196,420 @@
         }
 
         .control-btn:hover {
-            background: rgba(100, 150, 255,
+            background: rgba(100, 150, 255, 0.4);
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(100, 150, 255, 0.5);
+        }
+
+        .control-btn.active {
+            background: #6496ff;
+        }
+
+        .info-panel {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: 'Segoe UI', sans-serif;
+            z-index: 1000;
+        }
+
+        .info-panel h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(100, 150, 255, 0.5);
+        }
+
+        .info-panel p {
+            font-size: 14px;
+            margin: 5px 0;
+            opacity: 0.7;
+        }
+
+        .stats {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        .fullscreen-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            cursor: zoom-out;
+        }
+
+        .fullscreen-overlay.active {
+            display: flex;
+        }
+
+        .fullscreen-image {
+            max-width: 90vw;
+            max-height: 90vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+        }
+
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+        }
+
+        .loading-screen.hidden {
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(100, 150, 255, 0.3);
+            border-top-color: #6496ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+        }
+
+        .loading-bar {
+            width: 200px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            margin-top: 15px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-bar-progress {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #6496ff, #a8c5ff);
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            .photo-card {
+                width: 120px;
+                height: 90px;
+                margin-left: -60px;
+                margin-top: -45px;
+            }
+
+            .control-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 14px;
+            }
+
+            .info-panel h1 {
+                font-size: 18px;
+            }
+
+            .info-panel p {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loadingText">正在准备照片...</div>
+        <div class="loading-bar">
+            <div class="loading-bar-progress" id="loadingProgress"></div>
+        </div>
+    </div>
+
+    <div class="gallery-container" id="galleryContainer">
+        <div class="space-scene" id="spaceScene">
+            <div class="stars"></div>
+            
+            <div class="floating-particles" id="particles"></div>
+            
+            <div class="photo-container" id="photoContainer"></div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <h1>🖼️ 照片宇宙</h1>
+        <p>🖱️ 拖动旋转视角</p>
+        <p>👆 点击照片查看大图</p>
+    </div>
+
+    <div class="controls">
+        <button class="control-btn" id="autoRotateBtn" title="自动旋转">⟳</button>
+        <button class="control-btn" id="particleBtn" title="粒子效果">✨</button>
+        <button class="control-btn" id="prevBtn" title="上一张">‹</button>
+        <button class="control-btn" id="nextBtn" title="下一张">›</button>
+    </div>
+
+    <div class="stats">
+        <span id="photoCount">0</span> 张照片
+    </div>
+
+    <div class="fullscreen-overlay" id="fullscreenOverlay">
+        <img src="" alt="Fullscreen" class="fullscreen-image" id="fullscreenImage">
+    </div>
+
+    <script>
+        const photosData = [
+            {"file_name": "2N0A1363.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/afe7c748-a30a-409f-9353-2e863a7d970c.jpg"},
+            {"file_name": "2N0A1366.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/24f7fbe1-bb4b-435a-aa93-1fe5bc3c34c8.jpg"},
+            {"file_name": "2N0A1374.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/5f6631ef-f158-4e07-be8b-af6a1bdc311a.jpg"},
+            {"file_name": "2N0A1375.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/8b681be5-e32f-47ad-8c0c-5fa30ae26f56.jpg"},
+            {"file_name": "2N0A1376.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/1b110f5b-f27b-4750-abe7-7fd38356d575.jpg"},
+            {"file_name": "2N0A1378.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/2ea0d941-4a4d-48f7-a355-281ebc394d8c.jpg"},
+            {"file_name": "2N0A1379.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/00c48091-9507-4270-8930-57f18d28b555.jpg"},
+            {"file_name": "2N0A1380.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/99603982-e286-43ed-a498-a35139afcc63.jpg"},
+            {"file_name": "2N0A1383.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/2b06c458-b433-499c-b71a-f368776c9e01.jpg"},
+            {"file_name": "2N0A1386.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/7d63e7e2-489b-4fde-85ef-69c85ed567f7.jpg"},
+            {"file_name": "2N0A1387.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/be3e7109-291f-4839-9d73-39cc064ff88f.jpg"},
+            {"file_name": "2N0A1388.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/04631e4c-6446-4f92-b6d1-cbff81ad5e44.jpg"},
+            {"file_name": "2N0A1390.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/583da59d-ad45-4856-92c1-a814ed9b3cab.jpg"},
+            {"file_name": "2N0A1392.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/cf66f600-01c2-4c62-a285-528b922bfd5d.jpg"},
+            {"file_name": "2N0A1393.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/8a048884-3c04-4701-925c-eb9e02413661.jpg"},
+            {"file_name": "2N0A1394.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/4836ad76-9918-400f-851f-6fab25efc5ad.jpg"},
+            {"file_name": "2N0A1396.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/ba0b99e4-3f2a-426f-bb79-3e70d67f75f8.jpg"},
+            {"file_name": "2N0A1397.jpg", "file_uri": "https://res-pri.pixcheese.com/fd91/370481409/eff/ori/2613d980-4fbd-4188-bfc8-4d6cf395c028.jpg"}
+        ];
+
+        let isAutoRotating = true;
+        let isParticleEnabled = true;
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let currentRotationY = 0;
+        let currentRotationX = -10;
+        let loadedCount = 0;
+
+        function init() {
+            createParticles();
+            createPhotos();
+        }
+
+        function createParticles() {
+            const container = document.getElementById('particles');
+            const particleCount = 50;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 8 + 's';
+                particle.style.animationDuration = (6 + Math.random() * 4) + 's';
+                particle.style.width = (2 + Math.random() * 4) + 'px';
+                particle.style.height = particle.style.width;
+                container.appendChild(particle);
+            }
+        }
+
+        function createPhotos() {
+            const container = document.getElementById('photoContainer');
+            const count = photosData.length;
+            const radius = 450;
+            const layers = 3;
+            const photosPerLayer = Math.ceil(count / layers);
+
+            photosData.forEach((photo, index) => {
+                const layer = Math.floor(index / photosPerLayer);
+                const posInLayer = index % photosPerLayer;
+                
+                const angleY = (posInLayer / photosPerLayer) * Math.PI * 2;
+                const layerOffset = (layer - (layers - 1) / 2) * 150;
+                
+                const x = Math.sin(angleY) * radius;
+                const y = layerOffset;
+                const z = Math.cos(angleY) * radius;
+
+                const card = document.createElement('div');
+                card.className = 'photo-card loading';
+                card.style.transform = `translate3d(${x}px, ${y}px, ${z}px) rotateY(${-angleY * 180 / Math.PI}deg)`;
+
+                const inner = document.createElement('div');
+                inner.className = 'photo-card-inner';
+
+                const img = document.createElement('img');
+                img.className = 'photo-image';
+                img.dataset.original = photo.file_uri;
+                img.alt = photo.file_name;
+
+                const fallback = document.createElement('div');
+                fallback.className = 'photo-fallback';
+                fallback.textContent = photo.file_name;
+
+                inner.appendChild(img);
+                inner.appendChild(fallback);
+                card.appendChild(inner);
+                container.appendChild(card);
+
+                const thumbnailUrl = photo.file_uri + (photo.file_uri.includes('?') ? '&' : '?') + 'width=200';
+                const imgLoader = new Image();
+                imgLoader.onload = () => {
+                    img.src = imgLoader.src;
+                    card.classList.remove('loading');
+                    loadedCount++;
+                    updateLoading();
+                };
+                imgLoader.onerror = () => {
+                    card.classList.remove('loading');
+                    img.style.display = 'none';
+                    fallback.style.display = 'flex';
+                    loadedCount++;
+                    updateLoading();
+                };
+                imgLoader.src = thumbnailUrl;
+
+                card.addEventListener('click', () => {
+                    openFullscreen(photo.file_uri);
+                });
+            });
+
+            document.getElementById('photoCount').textContent = photosData.length;
+        }
+
+        function updateLoading() {
+            const progress = (loadedCount / photosData.length) * 100;
+            document.getElementById('loadingProgress').style.width = progress + '%';
+            document.getElementById('loadingText').textContent = `加载中... ${loadedCount}/${photosData.length}`;
+
+            if (loadedCount >= photosData.length) {
+                setTimeout(() => {
+                    document.getElementById('loadingScreen').classList.add('hidden');
+                }, 500);
+            }
+        }
+
+        function toggleAutoRotate() {
+            isAutoRotating = !isAutoRotating;
+            document.getElementById('spaceScene').classList.toggle('paused');
+            document.getElementById('autoRotateBtn').classList.toggle('active');
+        }
+
+        function toggleParticles() {
+            isParticleEnabled = !isParticleEnabled;
+            document.getElementById('particles').style.display = isParticleEnabled ? 'block' : 'none';
+            document.getElementById('particleBtn').classList.toggle('active');
+        }
+
+        function rotateScene(deltaX, deltaY) {
+            currentRotationY += deltaX * 0.5;
+            currentRotationX = Math.max(-30, Math.min(15, currentRotationX + deltaY * 0.3));
+            document.getElementById('spaceScene').style.transform = `rotateY(${currentRotationY}deg) rotateX(${currentRotationX}deg)`;
+        }
+
+        document.getElementById('galleryContainer').addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            if (isAutoRotating) {
+                toggleAutoRotate();
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - lastMouseX;
+            const deltaY = e.clientY - lastMouseY;
+            rotateScene(deltaX, deltaY);
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.getElementById('galleryContainer').addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            if (isAutoRotating) {
+                toggleAutoRotate();
+            }
+        });
+
+        document.getElementById('galleryContainer').addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const deltaX = e.touches[0].clientX - touchStartX;
+            const deltaY = e.touches[0].clientY - touchStartY;
+            rotateScene(deltaX, deltaY);
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+
+        document.getElementById('autoRotateBtn').addEventListener('click', toggleAutoRotate);
+        document.getElementById('particleBtn').addEventListener('click', toggleParticles);
+
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            if (isAutoRotating) toggleAutoRotate();
+            rotateScene(-40, 0);
+        });
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            if (isAutoRotating) toggleAutoRotate();
+            rotateScene(40, 0);
+        });
+
+        function openFullscreen(url) {
+            const overlay = document.getElementById('fullscreenOverlay');
+            const img = document.getElementById('fullscreenImage');
+            img.src = url;
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        document.getElementById('fullscreenOverlay').addEventListener('click', () => {
+            const overlay = document.getElementById('fullscreenOverlay');
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const overlay = document.getElementById('fullscreenOverlay');
+                if (overlay.classList.contains('active')) {
+                    overlay.classList.remove('active');
+                    document.body.style.overflow = '';
+                }
+            }
+            if (e.key === 'ArrowLeft') rotateScene(-30, 0);
+            if (e.key === 'ArrowRight') rotateScene(30, 0);
+            if (e.key === 'ArrowUp') rotateScene(0, -5);
+            if (e.key === 'ArrowDown') rotateScene(0, 5);
+        });
+
+        window.addEventListener('resize', () => {
+            document.getElementById('spaceScene').style.transform = `rotateY(${currentRotationY}deg) rotateX(${currentRotationX}deg)`;
+        });
+
+        init();
+    </script>
+</body>
+</html>
